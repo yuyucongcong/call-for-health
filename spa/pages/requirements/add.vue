@@ -1,12 +1,14 @@
 <template>
   <loading :loading="loading" :fullscreen="false">
-    <v-container>
+    <v-container class="py-5">
       <v-form ref="form" v-model="valid" lazy-validation>
-        <hosiptal :hosiptal-data.sync="hosiptalData" />
-        <v-subheader>物资需求</v-subheader>
-        <product :supplies.sync="supplies" @deleteProductItem="deleteItem" />
+        <hosiptal-form :hosiptal-data.sync="hosiptalData" />
+        <v-subheader class="pa-0">
+          物资需求
+        </v-subheader>
+        <product-form :supplies.sync="supplies" @deleteProductItem="deleteItem" />
         <v-btn
-          class="mr-4 add-button"
+          class="mt-4 add-button"
           outlined
           block
           color="primary"
@@ -16,9 +18,10 @@
         </v-btn>
         <v-divider class="requirement-divider" />
         <v-btn
-          class="mr-4"
+          class="mt-5"
           color="primary"
           block
+          depressed
           @click="submit"
         >
           保存
@@ -30,10 +33,10 @@
 
 <script lang="ts">
 import { Component, Vue } from 'vue-property-decorator'
-import { add } from '@/services/api/requirement'
+import { addRequirements } from '@/services/api'
 import { IRequirement } from '@/services/interface'
-import Hosiptal from '@/components/requirement/hosiptal.vue'
-import Product from '@/components/requirement/product.vue'
+import HosiptalForm from '@/components/partial/requirements/HosiptalForm.vue'
+import ProductForm from '@/components/partial/requirements/ProductForm.vue'
 
 @Component({
   middleware: 'i18n',
@@ -43,18 +46,20 @@ import Product from '@/components/requirement/product.vue'
     }
   },
   components: {
-    Hosiptal,
-    Product
+    HosiptalForm,
+    ProductForm
   }
 })
 class AddRequirementPage extends Vue {
   loading = false
+
   valid = true
 
   hosiptalData:IRequirement | any = {
-    hospitalName: '',
-    hospitalAddress: '',
-    hospitalCellphone: '',
+    text: '',
+    location: '',
+    contacts: '',
+    sourceUrl: '',
     products: []
   }
 
@@ -66,13 +71,6 @@ class AddRequirementPage extends Vue {
 
   get title () {
     return '新增需求'
-  }
-
-  mounted () {
-    this.init()
-  }
-
-  async init () {
   }
 
   addItem () {
@@ -96,36 +94,23 @@ class AddRequirementPage extends Vue {
 
   async submit () {
     const submitData:any = {
-      text: this.hosiptalData.hospitalName,
-      location: this.hosiptalData.hospitalAddress,
-      contacts: this.hosiptalData.hospitalCellphone,
+      text: this.hosiptalData.text,
+      location: this.hosiptalData.location,
+      contacts: this.hosiptalData.contacts,
+      sourceUrl: this.hosiptalData.sourceUrl,
       products: this.supplies
     }
-    if ((this.$refs.form as any).validate()) {
-      try {
-        this.loading = true
-        const resp = await add(submitData)
-        this.loading = false
-        this.$router.replace('/requirements/' + resp.id)
-      } catch (error) {
-        this.$toast({ message: error.toString(), color: 'error' })
-      }
+    const valid = (this.$refs.form as any).validate()
+    if (!valid) { return }
+    try {
+      this.loading = true
+      const resp = await addRequirements(submitData)
+      this.loading = false
+      this.$router.replace('/requirements/' + resp.id)
+    } catch (error) {
+      this.$toast({ message: error.toString(), color: 'error' })
     }
   }
 }
 export default AddRequirementPage
 </script>
-
-<style lang="scss" scoped>
-.information-content{
-  padding: 0 16px 0 16px;
-  margin: 0 auto;
-  box-sizing: border-box;
-}
-.add-button{
-  margin-top: 20px;
-}
-.requirement-divider{
-  margin: 20px auto 20px;
-}
-</style>

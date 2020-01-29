@@ -2,7 +2,7 @@
   <loading :loading="loading" :fullscreen="false">
     <v-container>
       <v-flex v-if="notConfirmed" class="hint hint-warning caption">
-        <p>本需求尚未得到确认，请等待志愿者确认本需求。</p>
+        <p>本需求尚未得到确认</p>
       </v-flex>
       <v-flex>
         <requirement-item
@@ -30,16 +30,68 @@
           </v-flex>
         </v-card-text>
       </v-card>
+      <!-- <pass-action :id="id" :show="showReview" @done="handleRefresh" /> -->
       <v-flex v-if="confirmed" class="mt-2">
-        <v-btn block color="error" depressed class="mb-2" @click="gotoEditReuirement">
-          修改
-        </v-btn>
-        <v-btn block color="primary" depressed class="mb-2" @click="showShare = true">
+        <v-btn
+          block
+          color="primary"
+          depressed
+          class="mb-2"
+          @click="showShare = true"
+        >
           分享
         </v-btn>
-        <v-btn block color="primary" outlined @click="gotoScreenshot">
+        <v-btn
+          block
+          color="primary"
+          outlined
+          @click="gotoScreenshot"
+        >
           保存图片
         </v-btn>
+      </v-flex>
+      <v-flex class="mt-4">
+        <v-btn
+          v-if="hasPermissionToEdit"
+          block
+          color="primary"
+          outlined
+          class="mb-2"
+          @click="gotoEditReuirement"
+        >
+          修改需求内容
+        </v-btn>
+        <v-btn
+          v-if="hasPermissionToChangeStatus"
+          block
+          color="primary"
+          outlined
+          class="mb-2"
+          @click="showStatusDialog = true"
+        >
+          设置状态
+        </v-btn>
+        <v-dialog
+          v-model="showStatusDialog"
+          max-width="290"
+        >
+          <v-card>
+            <v-card-title class="headline">
+              设置需求状态
+            </v-card-title>
+            <v-card-text>
+              <v-btn block color="primary" outlined class="mb-2" @click="confirmRequirement">
+                确认
+              </v-btn>
+              <v-btn block color="primary" outlined class="mb-2" @click="holdRequirement">
+                待确认
+              </v-btn>
+              <v-btn block color="primary" outlined class="mb-2" @click="hideRequirement">
+                隐藏
+              </v-btn>
+            </v-card-text>
+          </v-card>
+        </v-dialog>
       </v-flex>
       <div @click="showShare = false">
         <v-overlay
@@ -57,9 +109,11 @@
 
 <script lang="ts">
 import { Component, Vue } from 'vue-property-decorator'
-import { getRequirement, getAttachments } from '@/services/api'
+import { Getter } from 'vuex-class'
+import { getRequirement, getAttachments, updateRequirementStatus } from '@/services/api'
 import { IRequirement, IAttachment } from '@/services/interface'
-import RequirementItem from '@/components/RequirementItem.vue'
+import RequirementItem from '@/components/partial/requirements/RequirementItem.vue'
+import PassAction from '@/components/partial/requirements/PassAction.vue'
 
 @Component({
   head () {
@@ -68,14 +122,22 @@ import RequirementItem from '@/components/RequirementItem.vue'
     }
   },
   components: {
-    RequirementItem
+    RequirementItem,
+    PassAction
   }
 })
 class IndexPage extends Vue {
+  @Getter('user/logged') logged
+
+  @Getter('user/isVolunteer') isVolunteer
+
   requirement: IRequirement | any = {};
+
   attachments: Array<IAttachment> | [] = [];
+
   showShare: boolean = false;
-  id: any = 0;
+
+  showStatusDialog: boolean = false;
 
   loading = false
 
@@ -86,6 +148,10 @@ class IndexPage extends Vue {
     return '需求详情'
   }
 
+  get id () {
+    return this.$route.params.id
+  }
+
   get notConfirmed () {
     return this.requirement && this.requirement.status === 'PENDING'
   }
@@ -94,19 +160,29 @@ class IndexPage extends Vue {
     return this.requirement && this.requirement.status === 'CONFIRMED'
   }
 
+  get hasPermissionToEdit () {
+    return this.requirement.creatorId === this.logged.id || this.isVolunteer
+  }
+
+  get hasPermissionToChangeStatus () {
+    return this.isVolunteer
+  }
+
   gotoEditReuirement () {
-    this.$router.push('/requirements/edit/' + this.id)
+    this.$router.push(`/requirements/${this.id}/edit`)
   }
 
   mounted () {
     this.init()
   }
 
+  handleRefresh () {
+    this.init()
+  }
+
   async init () {
     this.loading = true
-    const id = this.$route.params.id
-    this.id = id
-    await this.request(id)
+    await this.request(this.id)
     this.loading = false
   }
 
@@ -120,6 +196,26 @@ class IndexPage extends Vue {
     } catch (error) {
       this.$errorHandler(this.$toast.bind(this), error)
     }
+  }
+
+  async confirmRequirement () {
+    await this.changeRequirementStatus('CONFIRMED')
+  }
+
+  async holdRequirement () {
+    await this.changeRequirementStatus('PENDING')
+  }
+
+  async hideRequirement () {
+    await this.changeRequirementStatus('HIDDEN')
+  }
+
+  async changeRequirementStatus (st) {
+    const requirement = await updateRequirementStatus(this.requirement.id, {
+      'status': st
+    })
+    this.requirement = requirement
+    this.showStatusDialog = false
   }
 
   gotoScreenshot () {

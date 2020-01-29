@@ -15,9 +15,9 @@ export const getters = {
     }
     return false
   },
-  isVoluneer (state) {
+  isVolunteer (state) {
     if (state && state.profile) {
-      return state.profile.role === 'VOLUNEER'
+      return state.profile.role === 'VOLUNTEER'
     }
     return false
   }

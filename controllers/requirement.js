@@ -5,14 +5,19 @@ const { buildOnChainRecord } = require('../utils/view')
 
 module.exports = {
   list: async function(ctx) {
+    const { status, limit = 10, offset = 0 } = ctx.query
+    const filters = {}
+    status && (filters.status = status)
     let records = await model.Requirement.findAll({
-      where: { status: model.RequirementStatus.CONFIRMED },
+      where: filters,
       include: [{
         model: model.User,
         attributes: model.UserAttrs,
         as: 'creator'
       }],
-      order: [["createdAt", "DESC"]]
+      order: [["createdAt", "DESC"]],
+      limit: Number(limit),
+      offset: Number(offset)
     })
     ctx.body = { status: 'success', data: records };
   },
@@ -20,7 +25,6 @@ module.exports = {
   listMine: async function(ctx) {
     let records = await model.Requirement.findAll({
       where: {
-        status: model.RequirementStatus.CONFIRMED,
         creatorId: ctx.state.user.id
       },
       include: [{
@@ -98,6 +102,7 @@ module.exports = {
       location: createData.location,
       contacts: createData.contacts,
       products: createData.products,
+      sourceUrl: createData.sourceUrl,
       status: status
     });
 
@@ -121,18 +126,79 @@ module.exports = {
     ctx.body = { status: 'success', data: itemExported };
   },
 
+  handleUpdate: async function(ctx) {
+    const id = ctx.params.id;
+    const user = ctx.state.user;
+    const updateData = ctx.request.body;
+
+
+    const existed = await model.Requirement.findByPk(id);
+    if (existed === null) {
+      ctx.body = { status: 404, error: 'not found' }
+      return
+    }
+    if (user.role !== 'VOLUNTEER' && user.id !== existed.creatorId) {
+      ctx.body = { status: 403, error: 'no permission' }
+      return
+    }
+
+    let txId = '';
+    let payload = {
+      text: updateData.text || existed.text,
+      location: updateData.location || existed.location,
+      contacts: updateData.contacts || existed.contacts,
+      products: updateData.products || existed.products,
+      sourceUrl: updateData.sourceUrl || existed.sourceUrl
+    }
+
+    if (config.network_gateway.enabled) {
+      // 1. create a item in network
+      try {
+        const onChainData = buildOnChainRecord(user, 'UPDATE_REQ', {
+          requirementId: existed.id,
+          requirementTxId: existed.latestTxId || existed.txId,
+          status: updateData.status
+        })
+        const resp = await metadb.seal(onChainData);
+        txId = resp.data.transaction_hash;
+      } catch (e) {
+        ctx.body = { status: 503, error: "failed to write to TestNet: " + e.message};
+        return;
+      }
+    }
+
+    // 2. update the db record
+    payload.latestTxId = txId
+    existed.update(payload)
+
+    ctx.body = { status: 'success', data: existed }
+
+  },
+
   handleUpdateStatus: async function(ctx) {
     const id = ctx.params.id;
     const user = ctx.state.user;
     const updateData = ctx.request.body;
 
+    if (user.role !== 'VOLUNTEER') {
+      ctx.body = { status: 403, error: 'no permission' }
+      return
+    }
+
     // only allow updating status
     if (updateData.status in model.RequirementStatus) {
-      const record = await model.Requirement.findByPk(id);
+      const record = await model.Requirement.findByPk(id, {
+        include: [{
+          model: model.User,
+          attributes: model.UserAttrs,
+          as: 'creator'
+        }]
+      });
       if (record === null) {
         ctx.body = { status: 404, error: 'not found'}
         return
       }
+
       let resp = {};
       let txId = '';
 

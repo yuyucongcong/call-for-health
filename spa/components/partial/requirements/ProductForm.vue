@@ -3,7 +3,7 @@
     <v-card
       v-for="(item, i) in supplies"
       :key="i"
-      class="supplies"
+      class="pa-3"
       outlined
     >
       <div class="supplies-content">
@@ -12,6 +12,7 @@
           :rules="rules.productName"
           required
           label="产品名称"
+          dense
           single-line
         />
         <v-text-field
@@ -19,18 +20,25 @@
           single-line
           :rules="rules.productModel"
           required
+          dense
           label="型号或者标准"
         />
         <v-text-field
           v-model="supplies[i].amount"
           single-line
           :rules="rules.productAmount"
-          required
+          dense
           label="需求量"
         />
       </div>
       <v-card-actions>
-        <v-btn text color="primary" @click="deleteItem(i)">
+        <v-spacer />
+        <v-btn
+          small
+          outlined
+          color="error"
+          @click="delectItem(i)"
+        >
           删除
         </v-btn>
       </v-card-actions>
@@ -71,11 +79,3 @@ class Product extends Vue {
 }
 export default Product
 </script>
-
-<style lang="scss" scoped>
-.supplies-content{
-  padding: 0 16px 0 16px;
-  margin: 0 auto;
-  box-sizing: border-box;
-}
-</style>
